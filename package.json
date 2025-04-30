@@ -1,0 +1,19 @@
+{
+  "name": "ctf-bot",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "audit": "^0.0.6",
+    "discord.js": "^14.19.2",
+    "dotenv": "^16.5.0",
+    "ephemeral": "^0.0.6",
+    "fix": "^0.0.6",
+    "install": "^0.13.0",
+    "npm": "^10.9.2",
+    "sqlite": "^5.1.1",
+    "sqlite3": "^5.1.7"
+  }
+}
