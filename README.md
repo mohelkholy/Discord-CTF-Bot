@@ -1,4 +1,6 @@
 
+---
+
 ```markdown
 # 🎯 Discord CTF Challenge Bot
 
