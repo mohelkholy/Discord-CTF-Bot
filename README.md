@@ -124,7 +124,7 @@ Create a `.env` file and populate it with your bot token, role ID, and channel I
 ### 4. Run the Bot
 
 ```bash
-node bot.js
+node index.js
 ```
 
 ---
