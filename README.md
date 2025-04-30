@@ -114,7 +114,6 @@ cd Discord-CTF-Bot
 
 ```bash
 npm install
-And
 npm install discord.js dotenv sqlite sqlite3
 ```
 
