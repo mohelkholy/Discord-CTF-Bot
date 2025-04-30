@@ -106,8 +106,8 @@ The bot uses SQLite to store persistent data:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/ctf-discord-bot.git
-cd ctf-discord-bot
+git clone https://github.com/hyperdargo/Discord-CTF-Bot/
+cd Discord-CTF-Bot
 ```
 
 ### 2. Install Dependencies
