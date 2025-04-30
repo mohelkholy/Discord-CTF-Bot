@@ -1,7 +1,6 @@
 
 ---
 
-```markdown
 # 🎯 Discord CTF Challenge Bot
 
 A powerful Discord bot to manage, host, and track CTF (Capture The Flag) challenges in your server.
@@ -27,9 +26,9 @@ A powerful Discord bot to manage, host, and track CTF (Capture The Flag) challen
 Each challenge starts with **1000 base points**, which decrease as more users solve the box.
 
 ### 📉 Point Reduction Formula:
-```js
+js
 points = Math.max(100, 1000 - (solves * 50));
-```
+
 
 - First solver: 1000 points  
 - Each subsequent solver: -50 points  
