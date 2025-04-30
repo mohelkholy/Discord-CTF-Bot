@@ -114,6 +114,8 @@ cd Discord-CTF-Bot
 
 ```bash
 npm install
+And
+npm install discord.js dotenv sqlite sqlite3
 ```
 
 ### 3. Set Up Environment Variables
@@ -153,8 +155,9 @@ Please open an issue or submit a pull request for any ideas or bugs.
 ## 📄 License
 
 This project is licensed under the MIT License.
-```
+
 
 ---
 
-Let me know if you'd like a `.env.example` file or a visual badge section at the top!
+Any Question? Join Our Discord [DTEmpire](https://discord.com/invite/JYNCNAxPx7)
+Test Server: [Attack On Hash Function](https://discord.com/invite/uDaXaUWEF2)
