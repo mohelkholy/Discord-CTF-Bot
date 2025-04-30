@@ -1,72 +1,70 @@
-
 ---
 
 # 🎯 Discord CTF Challenge Bot
 
-A powerful Discord bot to manage, host, and track CTF (Capture The Flag) challenges in your server.
+A powerful and lightweight Discord bot for hosting and managing Capture The Flag (CTF) challenges in your server.
 
-> Supports dynamic scoring, admin moderation tools, real-time flag submissions, and leaderboard tracking!
+> ✨ Includes dynamic scoring, real-time flag validation, modals for admins, and a competitive leaderboard system.
 
 ---
 
 ## 🚀 Features
 
-- ✅ Create, edit, and delete CTF challenges via modal
-- 🧩 Flag submission with automatic validation
-- 📉 Dynamic scoring (points decrease with each solve)
-- 📢 Auto-announcement of new challenges
-- 🧑‍🤝‍🧑 Leaderboards and user statistics
-- 🔐 Separate help commands for users and admins
-- 💾 SQLite-based storage
+- 🛠️ Create, edit, and delete CTF challenges via interactive modals  
+- 🧩 Flag submission with automatic validation  
+- 📉 Dynamic point system based on number of solves  
+- 📢 Auto-announcement of new challenges  
+- 🧑‍🤝‍🧑 User profiles and leaderboard  
+- 🔐 Separate help commands for users and admins  
+- 💾 Data stored locally using SQLite
 
 ---
 
 ## 🧠 Dynamic Points System
 
-Each challenge starts with **1000 base points**, which decrease as more users solve the box.
+Each challenge begins with **1000 base points**. As more players solve it, the point value decreases using the formula below:
 
-### 📉 Point Reduction Formula:
-js
+```js
 points = Math.max(100, 1000 - (solves * 50));
+```
 
+- 🥇 First solver: 1000 points  
+- 📉 Each additional solver: -50 points  
+- ⛔ Minimum value: 100 points  
 
-- First solver: 1000 points  
-- Each subsequent solver: -50 points  
-- Minimum floor: 100 points
-
-This encourages fast solving and fair competition.
+This scoring system promotes fast solving and balanced competition.
 
 ---
 
 ## 📜 Help Commands
 
-### 👤 For All Users
+### 👤 Normal Users
 
 ```bash
 ,help
 ```
 
-Displays:
-- How to submit a flag
-- View personal stats and rank
-- Access leaderboard
-- General usage tips
+Shows:
+- How to submit flags  
+- View user stats and rank  
+- Access leaderboard  
+- General usage guide  
 
 ---
 
-### 👑 For Admins
+### 👑 Admins
 
 ```bash
 ,help-admin
 ```
 
 Displays:
-- How to create/edit/delete challenges
-- Challenge format and category management
-- Required bot permissions
-- Announcement/channel settings
+- Challenge management tools  
+- Format and category setup  
+- Required bot permissions  
+- Announcement and submission channel setup  
 
-> 🔒 Admin-only access. Set your admin role in `.env` as shown below:
+> 🔐 To use admin commands, set your admin role ID in the `.env` file:
 
 ```env
 ADMIN_ROLE_ID=your_discord_admin_role_id
@@ -74,30 +72,29 @@ ADMIN_ROLE_ID=your_discord_admin_role_id
 
 ---
 
-## ⚙️ Environment Configuration (`.env`)
+## ⚙️ Configuration (`.env`)
 
-Create a `.env` file in your root directory with the following:
+Create a `.env` file and fill in the following:
 
 ```env
 DISCORD_TOKEN=your_bot_token_here
 ADMIN_ROLE_ID=your_discord_admin_role_id
-ANNOUNCEMENT_CHANNEL=channel_id_for_new_challenge_notifications
+ANNOUNCEMENT_CHANNEL=channel_id_for_announcements
 SUBMISSION_CHANNEL=channel_id_for_flag_submissions
 ```
 
-You can refer to `.env.example` for the base template.
+Refer to `.env.example` for a prefilled template.
 
 ---
 
-## 🧱 Database Schema (SQLite)
+## 🧱 Database (SQLite)
 
-The bot uses SQLite to store persistent data:
+The bot uses SQLite to persist all data.
 
 ### Tables:
-
-- `users`: ID, username, total points, challenges solved, rank
-- `challenges`: ID, name, flag, category, difficulty, dynamic point value
-- `submissions`: challenge_id, user_id, timestamp, awarded points
+- `users` – User ID, username, total points, rank, challenges solved  
+- `challenges` – Challenge info: name, category, difficulty, flag, points  
+- `submissions` – Track when users submit flags and earn points  
 
 ---
 
@@ -106,7 +103,7 @@ The bot uses SQLite to store persistent data:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/hyperdargo/Discord-CTF-Bot/
+git clone https://github.com/hyperdargo/Discord-CTF-Bot
 cd Discord-CTF-Bot
 ```
 
@@ -117,11 +114,11 @@ npm install
 npm install discord.js dotenv sqlite sqlite3
 ```
 
-### 3. Set Up Environment Variables
+### 3. Configure Environment
 
-Create a `.env` file and populate it with your bot token, role ID, and channel IDs.
+Copy `.env.example` to `.env` and fill in your credentials.
 
-### 4. Run the Bot
+### 4. Start the Bot
 
 ```bash
 node index.js
@@ -129,41 +126,59 @@ node index.js
 
 ---
 
-## 🔧 Admin Challenge Modal
+## 🧾 Admin Challenge Modal
 
-Admins can create and edit challenges directly using a modal interface. Fields include:
+Admins can manage challenges directly through Discord modals. Fields include:
 
-- `name`: challenge title  
-- `difficulty`: Easy / Medium / Hard  
-- `description`: short description  
-- `category`: e.g., Web, Crypto, Forensics  
-- `flag_format`: example flag format  
-- `flag`: actual correct flag  
-- `links`: optional challenge resources
+- **name** – Challenge name  
+- **difficulty** – Easy / Medium / Hard  
+- **description** – Brief explanation  
+- **category** – Web, Crypto, Forensics, etc.  
+- **flag_format** – Expected format (e.g., `flag{}`)  
+- **flag** – Actual flag  
+- **links** – Optional resources  
+
+---
+
+## 📁 Release Package
+
+Release archive includes:
+
+- `index.js` – Main bot logic  
+- `.env.example` – Config template  
+- `package.json` – Node.js dependency file  
+- `requirements.txt` – Optional dependencies  
+- `README.md` – Full setup & usage guide
+
+Supported archive formats: `.zip`, `.tar`, `.rar`, `.7z`
 
 ---
 
 ## 🤝 Contributing
 
-Contributions, suggestions, and PRs are welcome!
-
-Please open an issue or submit a pull request for any ideas or bugs.
+We welcome pull requests, suggestions, and bug reports.  
+Feel free to open an issue or fork the project.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License.
-
+This project is released under the **MIT License**.
 
 ---
 
-Any Question? Join Our Discord [DTEmpire](https://discord.com/invite/JYNCNAxPx7)
+## 🔗 Join Our Community
 
-Test Server: [Attack On Hash Function](https://discord.com/invite/uDaXaUWEF2)
-![Screenshot 2025-04-30 144612](https://github.com/user-attachments/assets/e67bc714-7e9e-40af-b86a-0394ac5c36e2)
-![Screenshot 2025-04-30 144619](https://github.com/user-attachments/assets/9d8003c4-f68e-4ed7-b5c6-1028afe4447f)
-![Screenshot 2025-04-30 144625](https://github.com/user-attachments/assets/5eb29eba-2859-4a9e-bd1f-82929a7b8763)
-![Screenshot 2025-04-30 144638](https://github.com/user-attachments/assets/86ec8716-8f0d-4320-85f1-5d4e05d9e28a)
+- 🎮 **Main Discord**: [DTEmpire](https://discord.com/invite/JYNCNAxPx7)  
+- 🧪 **Test Server**: [Attack On Hash Function](https://discord.com/invite/uDaXaUWEF2)
 
+---
 
+## 📸 Preview
+
+![Screenshot 1](https://github.com/user-attachments/assets/e67bc714-7e9e-40af-b86a-0394ac5c36e2)
+![Screenshot 2](https://github.com/user-attachments/assets/9d8003c4-f68e-4ed7-b5c6-1028afe4447f)
+![Screenshot 3](https://github.com/user-attachments/assets/5eb29eba-2859-4a9e-bd1f-82929a7b8763)
+![Screenshot 4](https://github.com/user-attachments/assets/86ec8716-8f0d-4320-85f1-5d4e05d9e28a)
+
+---
