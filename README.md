@@ -176,9 +176,10 @@ This project is released under the **MIT License**.
 
 ## 📸 Preview
 
-![Screenshot 1](https://github.com/user-attachments/assets/e67bc714-7e9e-40af-b86a-0394ac5c36e2)
-![Screenshot 2](https://github.com/user-attachments/assets/9d8003c4-f68e-4ed7-b5c6-1028afe4447f)
-![Screenshot 3](https://github.com/user-attachments/assets/5eb29eba-2859-4a9e-bd1f-82929a7b8763)
-![Screenshot 4](https://github.com/user-attachments/assets/86ec8716-8f0d-4320-85f1-5d4e05d9e28a)
+![Screenshot 1](https://github.com/user-attachments/assets/e67bc714-7e9e-40af-b86a-0394ac5c36e2 =500x500)
+![Screenshot 2](https://github.com/user-attachments/assets/9d8003c4-f68e-4ed7-b5c6-1028afe4447f =500x500)
+![Screenshot 3](https://github.com/user-attachments/assets/5eb29eba-2859-4a9e-bd1f-82929a7b8763 =500x500)
+![Screenshot 4](https://github.com/user-attachments/assets/86ec8716-8f0d-4320-85f1-5d4e05d9e28a =500x500)
+
 
 ---
