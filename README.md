@@ -1,6 +1,7 @@
 ---
 
 # 🎯 Discord CTF Challenge Bot
+![Discord Music Bot](https://img.shields.io/badge/Discord-CTF%20Bot-blue) ![GitHub](https://img.shields.io/badge/license_-DTEmpire-red)
 
 A powerful and lightweight Discord bot for hosting and managing Capture The Flag (CTF) challenges in your server.
 
@@ -147,30 +148,28 @@ Release archive includes:
 - `index.js` – Main bot logic  
 - `.env.example` – Config template  
 - `package.json` – Node.js dependency file  
-- `requirements.txt` – Optional dependencies  
-- `README.md` – Full setup & usage guide
+- `requirements.txt` – Optional dependencies
 
 Supported archive formats: `.zip`, `.tar`, `.rar`, `.7z`
 
 ---
 
-## 🤝 Contributing
+## Contributing 🤝
 
-We welcome pull requests, suggestions, and bug reports.  
-Feel free to open an issue or fork the project.
+Contributions are welcome! Please open an issue or submit a pull request for any improvements.
 
----
+## License 📄
 
-## 📄 License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-This project is released under the **MIT License**.
+Enjoy the CTF Bot! 🎶 If you like the bot, consider giving it a ⭐ on GitHub!
 
 ---
 
 ## 🔗 Join Our Community
 
-- 🎮 **Main Discord**: [DTEmpire](https://discord.com/invite/JYNCNAxPx7)  
-- 🧪 **Test Public Bot**: [DTEmpire CTF](https://discord.com/oauth2/authorize?client_id=1367446432084394014&permissions=11280&integration_type=0&scope=bot)
+- 🎮 **Main Discord**: [![Join Discord Server](https://img.shields.io/badge/Join-Discord%20Server-purple)](https://discord.gg/xUR9dZHpq8)
+- 🧪 **Public Bot**: [![Invite DTEmpire Music Bot](https://img.shields.io/badge/Invite-DTEmpire%20Music%20Bot-blue)](https://discord.com/oauth2/authorize?client_id=1367446432084394014&permissions=11280&integration_type=0&scope=bot)
 
 ---
 
