@@ -170,7 +170,7 @@ This project is released under the **MIT License**.
 ## 🔗 Join Our Community
 
 - 🎮 **Main Discord**: [DTEmpire](https://discord.com/invite/JYNCNAxPx7)  
-- 🧪 **Test Server**: [Attack On Hash Function](https://discord.com/invite/uDaXaUWEF2)
+- 🧪 **Test Public Bot**: [DTEmpire CTF](https://discord.com/oauth2/authorize?client_id=1367446432084394014&permissions=11280&integration_type=0&scope=bot)
 
 ---
 
