@@ -1,68 +1,16 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 const sqlite3 = require('sqlite3').verbose();
 const { open } = require('sqlite');
 
-// Initialize database
 async function initializeDatabase() {
-    return open({
-        filename: './ctf.db',
-        driver: sqlite3.Database
-    });
-}
-
-const client = new Client({ 
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildMessageReactions
-    ] 
-});
-
-// Configuration
-const ANNOUNCEMENT_CHANNEL_ID = process.env.ANNOUNCEMENT_CHANNEL || null;
-const SUBMISSION_CHANNEL_ID = process.env.SUBMISSION_CHANNEL || ANNOUNCEMENT_CHANNEL_ID;
-
-// Help command embeds
-const helpEmbed = new EmbedBuilder()
-    .setTitle('🛠️ CTF Bot Help')
-    .setDescription('All commands use comma (,) prefix\nFlag submissions are private')
-    .addFields(
-        { name: ',help', value: 'Show this help menu' },
-        { name: ',ping', value: 'Check bot latency' },
-        { name: ',status', value: 'View bot statistics' },
-        { name: ',leaderboard', value: 'Show current rankings' },
-        { name: ',newchallenges', value: 'Get newest challenges in DMs' },
-        { name: ',flag <challenge> <flag>', value: 'Submit flag (auto-deletes)' }
-    )
-    .setColor('#0099ff')
-    .setFooter({ text: 'Made with ❤️ for CTF Players - By DTEmpire' });
-
-const adminHelpEmbed = new EmbedBuilder()
-    .setTitle('🔒 Admin Commands Help')
-    .setDescription('Administrator-only commands')
-    .addFields(
-        { name: ',create', value: 'Create new challenge (see format below)' },
-        { name: ',editchallenge', value: 'Edit existing challenge' },
-        { name: ',deletechallenge', value: 'Delete a challenge' },
-        { name: 'Create Format', value: ',create name | difficulty | description | category | flag_format | flag | link\nExample: ,create "XSS Challenge" | Medium | Find the XSS | Web | flag{xxx} | flag{real_flag} | discord.com' },
-        { name: 'Edit Format', value: ',editchallenge "Challenge Name" | field | new_value\nFields: name, difficulty, description, category, flag, points' }
-    )
-    .setColor('#FF0000');
-
-client.once('ready', async () => {
-    console.log(`Logged in as ${client.user.tag}!`);
-    const db = await initializeDatabase();
-    
+    const db = await open({ filename: './ctf.db', driver: sqlite3.Database });
     await db.exec(`
         CREATE TABLE IF NOT EXISTS challenges (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT UNIQUE,
             description TEXT,
             points INTEGER,
-            base_points INTEGER,
             flag TEXT,
             difficulty TEXT,
             category TEXT,
@@ -72,14 +20,12 @@ client.once('ready', async () => {
             author_name TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
-        
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
             username TEXT,
             points INTEGER DEFAULT 0,
             last_submission DATETIME
         );
-        
         CREATE TABLE IF NOT EXISTS submissions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT,
@@ -91,98 +37,114 @@ client.once('ready', async () => {
             FOREIGN KEY(challenge_id) REFERENCES challenges(id)
         );
     `);
+    return db;
+}
+
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers,
+    ]
 });
 
-// Helper functions
+const ANNOUNCEMENT_CHANNEL_ID = process.env.ANNOUNCEMENT_CHANNEL || null;
+const SUBMISSION_CHANNEL_ID = process.env.SUBMISSION_CHANNEL || ANNOUNCEMENT_CHANNEL_ID;
+
 function getDifficultyColor(difficulty) {
-    const colors = {
-        'Easy': '#00FF00',
-        'Normal': '#55FF55',
-        'Medium': '#FFFF00',
-        'Hard': '#FFA500',
-        'Insane': '#FF0000'
-    };
-    return colors[difficulty] || '#0099FF';
+    return { 'Easy': '#00FF00', 'Normal': '#55FF55', 'Medium': '#FFFF00', 'Hard': '#FFA500', 'Insane': '#FF0000' }[difficulty] || '#0099FF';
 }
 
-async function updateChallengeAnnouncement(db, challengeName) {
-    const channel = client.channels.cache.get(ANNOUNCEMENT_CHANNEL_ID);
-    if (!channel) return;
+function isAdmin(member) {
+    return member.roles.cache.has(process.env.ADMIN_ROLE_ID);
+}
 
-    const challenge = await db.get(
-        'SELECT * FROM challenges WHERE name = ?', 
-        [challengeName]
-    );
-    
-    if (!challenge) return;
+// Register slash commands
+async function registerCommands() {
+    const commands = [
+        new SlashCommandBuilder().setName('help').setDescription('Show all commands'),
+        new SlashCommandBuilder().setName('ping').setDescription('Check bot latency'),
+        new SlashCommandBuilder().setName('status').setDescription('View bot statistics'),
+        new SlashCommandBuilder().setName('leaderboard').setDescription('Show current rankings'),
+        new SlashCommandBuilder().setName('challenges').setDescription('View all active challenges'),
+        new SlashCommandBuilder()
+            .setName('flag')
+            .setDescription('Submit a flag privately')
+            .addStringOption(o => o.setName('challenge').setDescription('Challenge name').setRequired(true))
+            .addStringOption(o => o.setName('flag').setDescription('Your flag').setRequired(true)),
+        new SlashCommandBuilder()
+            .setName('create')
+            .setDescription('Create a new challenge (Admin only)')
+            .addStringOption(o => o.setName('name').setDescription('Challenge name').setRequired(true))
+            .addStringOption(o => o.setName('difficulty').setDescription('Easy/Normal/Medium/Hard/Insane').setRequired(true))
+            .addStringOption(o => o.setName('description').setDescription('Challenge description').setRequired(true))
+            .addStringOption(o => o.setName('category').setDescription('e.g. Web, Crypto, Forensics').setRequired(true))
+            .addStringOption(o => o.setName('flag_format').setDescription('e.g. flag{xxx}').setRequired(true))
+            .addStringOption(o => o.setName('flag').setDescription('The actual flag').setRequired(true))
+            .addIntegerOption(o => o.setName('points').setDescription('Points for this challenge').setRequired(true))
+            .addStringOption(o => o.setName('link').setDescription('Challenge link (optional)').setRequired(false)),
+        new SlashCommandBuilder()
+            .setName('editchallenge')
+            .setDescription('Edit a challenge (Admin only)')
+            .addStringOption(o => o.setName('name').setDescription('Challenge name').setRequired(true))
+            .addStringOption(o => o.setName('field').setDescription('Field to edit: name, difficulty, description, category, flag, flag_format, link, points').setRequired(true))
+            .addStringOption(o => o.setName('value').setDescription('New value').setRequired(true)),
+        new SlashCommandBuilder()
+            .setName('deletechallenge')
+            .setDescription('Delete a challenge (Admin only)')
+            .addStringOption(o => o.setName('name').setDescription('Challenge name').setRequired(true)),
+        new SlashCommandBuilder()
+            .setName('adminview')
+            .setDescription('View all challenges with flags (Admin only)'),
+    ].map(c => c.toJSON());
 
-    // Find the announcement message
-    const messages = await channel.messages.fetch({ limit: 50 });
-    const announcement = messages.find(m => 
-        m.embeds.length > 0 && 
-        m.embeds[0].title?.includes(challengeName)
-    );
-
-    if (announcement) {
-        // Get current solver count
-        const solverCount = await db.get(
-            'SELECT COUNT(*) as count FROM submissions WHERE challenge_id = ?',
-            [challenge.id]
-        );
-
-        const embed = new EmbedBuilder()
-            .setTitle(`🚩 ${challenge.name}`)
-            .setDescription(challenge.description)
-            .addFields(
-                { name: 'Difficulty', value: challenge.difficulty, inline: true },
-                { name: 'Category', value: challenge.category, inline: true },
-                { name: 'Current Points', value: challenge.points.toString(), inline: true },
-                { name: 'Base Points', value: challenge.base_points.toString(), inline: true },
-                { name: 'Solvers', value: solverCount.count.toString(), inline: true },
-                { name: 'Flag Format', value: challenge.flag_format || 'None specified', inline: true },
-                { name: 'Author', value: challenge.author_name, inline: true }
-            )
-            .setColor(getDifficultyColor(challenge.difficulty))
-            .setFooter({ text: `Submit with ,flag ${challenge.name} <flag>` });
-
-        await announcement.edit({ embeds: [embed] });
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+    try {
+        await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body: commands });
+        console.log('✅ Slash commands registered!');
+    } catch (err) {
+        console.error('Failed to register commands:', err);
     }
 }
 
-client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
-    if (!message.content.startsWith(',')) return;
+client.once('ready', async () => {
+    console.log(`Logged in as ${client.user.tag}!`);
+    await initializeDatabase();
+    await registerCommands();
+});
 
-    const args = message.content.slice(1).trim().split(/ +/);
-    const command = args.shift().toLowerCase();
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
     const db = await initializeDatabase();
+    const { commandName } = interaction;
 
-    // Help command
-    if (command === 'help') {
-        await message.channel.send({ embeds: [helpEmbed] });
-        return;
+    // /help
+    if (commandName === 'help') {
+        const embed = new EmbedBuilder()
+            .setTitle('🛠️ CTF Bot Help')
+            .setDescription('All commands use `/` prefix. Flag submissions are private.')
+            .addFields(
+                { name: '/help', value: 'Show this help menu' },
+                { name: '/ping', value: 'Check bot latency' },
+                { name: '/status', value: 'View bot statistics' },
+                { name: '/leaderboard', value: 'Show current rankings' },
+                { name: '/challenges', value: 'View all active challenges' },
+                { name: '/flag', value: 'Submit a flag privately' },
+            )
+            .setColor('#0099ff')
+            .setFooter({ text: 'Made for CTF Players' });
+        return interaction.reply({ embeds: [embed] });
     }
 
-    // Admin help command
-    if (command === 'help-admin') {
-        if (!message.member.roles.cache.has(process.env.ADMIN_ROLE_ID)) {
-            const reply = await message.channel.send('❌ Admin only command!');
-            setTimeout(() => reply.delete(), 5000);
-            return;
-        }
-        await message.channel.send({ embeds: [adminHelpEmbed] });
-        return;
+    // /ping
+    if (commandName === 'ping') {
+        const latency = Date.now() - interaction.createdTimestamp;
+        return interaction.reply(`🏓 Pong! Latency: ${latency}ms`);
     }
 
-    // Ping command
-    if (command === 'ping') {
-        const latency = Date.now() - message.createdTimestamp;
-        await message.channel.send(`🏓 Pong! Latency: ${latency}ms`);
-        return;
-    }
-
-    // Status command
-    if (command === 'status') {
+    // /status
+    if (commandName === 'status') {
         const challengeCount = await db.get('SELECT COUNT(*) as count FROM challenges');
         const userCount = await db.get('SELECT COUNT(*) as count FROM users');
         const embed = new EmbedBuilder()
@@ -194,401 +156,217 @@ client.on('messageCreate', async (message) => {
                 { name: 'Participants', value: userCount.count.toString(), inline: true }
             )
             .setColor('#00FF00');
-        await message.channel.send({ embeds: [embed] });
-        return;
+        return interaction.reply({ embeds: [embed] });
     }
 
-    // Leaderboard command
-    if (command === 'leaderboard') {
-        const topUsers = await db.all(
-            `SELECT username, points FROM users 
-            ORDER BY points DESC 
-            LIMIT 10`
-        );
-
+    // /leaderboard
+    if (commandName === 'leaderboard') {
+        const topUsers = await db.all('SELECT username, points FROM users ORDER BY points DESC LIMIT 10');
         const embed = new EmbedBuilder()
             .setTitle('🏆 CTF Leaderboard')
             .setDescription(
-                topUsers.map((user, index) => 
-                    `${index + 1}. ${user.username} - ${user.points} points`
-                ).join('\n') || 'No submissions yet!'
+                topUsers.map((u, i) => `${i + 1}. **${u.username}** — ${u.points} pts`).join('\n') || 'No submissions yet!'
             )
             .setColor('#FFD700');
-
-        await message.channel.send({ embeds: [embed] });
-        return;
+        return interaction.reply({ embeds: [embed] });
     }
 
-    // New Challenges Command
-    if (command === 'newchallenges') {
-        try {
-            const challenges = await db.all(
-                'SELECT * FROM challenges ORDER BY created_at DESC LIMIT 3'
-            );
+    // /challenges — public view (no flags)
+    if (commandName === 'challenges') {
+        const challenges = await db.all('SELECT * FROM challenges ORDER BY created_at DESC');
+        if (challenges.length === 0) return interaction.reply({ content: '❌ No challenges available yet!', ephemeral: true });
 
-            if (challenges.length === 0) {
-                return message.author.send('❌ No challenges available yet!').catch(console.error);
-            }
+        const embed = new EmbedBuilder()
+            .setTitle('🚩 Active Challenges')
+            .setColor('#0099ff');
 
-            const embed = new EmbedBuilder()
-                .setTitle('🔥 Newest Challenges')
-                .setDescription('Here are the 3 most recently added challenges')
-                .setColor('#FF4500');
-
-            challenges.forEach((challenge, index) => {
-                embed.addFields(
-                    {
-                        name: `${index + 1}. ${challenge.name}`,
-                        value: `**Difficulty:** ${challenge.difficulty}\n` +
-                               `**Category:** ${challenge.category}\n` +
-                               `**Current Points:** ${challenge.points}\n` +
-                               `**Base Points:** ${challenge.base_points}\n` +
-                               `**Author:** ${challenge.author_name}\n` +
-                               `**Added:** ${new Date(challenge.created_at).toLocaleDateString()}`,
-                        inline: false
-                    }
-                );
+        challenges.forEach(c => {
+            const solveCount = db.get('SELECT COUNT(*) as count FROM submissions WHERE challenge_id = ?', [c.id]);
+            embed.addFields({
+                name: `${c.name} — ${c.points} pts`,
+                value: `**Category:** ${c.category} | **Difficulty:** ${c.difficulty}\n**Format:** ${c.flag_format || 'N/A'}\n${c.link !== 'No Link Provided' ? `**Link:** ${c.link}` : ''}`,
+                inline: false
             });
+        });
 
-            embed.setFooter({ text: 'Use ,flag <challenge> <flag> to submit your solution' });
-
-            await message.author.send({ embeds: [embed] }).catch(console.error);
-            
-            // Confirm in the channel that DMs were sent
-            const reply = await message.channel.send('📩 Check your DMs for the newest challenges!');
-            setTimeout(() => reply.delete(), 5000);
-
-        } catch (error) {
-            console.error('New challenges error:', error);
-            message.author.send('❌ Failed to fetch challenges. Please try again later.').catch(console.error);
-        }
-        return;
+        return interaction.reply({ embeds: [embed] });
     }
-    
-    // Flag submission command
-    if (command === 'flag') {
-        try {
-            await message.delete();
-        } catch (error) {
-            console.error('Failed to delete flag submission:', error);
+
+    // /adminview — admin only, shows flags
+    if (commandName === 'adminview') {
+        if (!isAdmin(interaction.member)) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
+
+        const challenges = await db.all('SELECT * FROM challenges ORDER BY created_at DESC');
+        if (challenges.length === 0) return interaction.reply({ content: '❌ No challenges yet!', ephemeral: true });
+
+        const embed = new EmbedBuilder()
+            .setTitle('🔒 Admin — All Challenges')
+            .setColor('#FF0000');
+
+        for (const c of challenges) {
+            const solvers = await db.get('SELECT COUNT(*) as count FROM submissions WHERE challenge_id = ?', [c.id]);
+            embed.addFields({
+                name: `${c.name} (${c.category} / ${c.difficulty})`,
+                value: `**Points:** ${c.points}\n**Flag:** \`${c.flag}\`\n**Solvers:** ${solvers.count}\n**Format:** ${c.flag_format || 'N/A'}`,
+                inline: false
+            });
         }
 
-        const userFlag = args.pop();
-        const challengeName = args.join(' ');
+        return interaction.reply({ embeds: [embed], ephemeral: true }); // only visible to admin
+    }
 
-        if (!challengeName || !userFlag) {
-            return message.author.send('❌ Usage: `,flag <challenge name> <flag>`').catch(console.error);
-        }
+    // /flag — private submission
+    if (commandName === 'flag') {
+        const challengeName = interaction.options.getString('challenge');
+        const userFlag = interaction.options.getString('flag');
+
+        await interaction.deferReply({ ephemeral: true }); // only visible to user
 
         try {
-            const challenge = await db.get(
-                'SELECT * FROM challenges WHERE name = ?', 
-                [challengeName]
-            );
+            const challenge = await db.get('SELECT * FROM challenges WHERE name = ?', [challengeName]);
+            if (!challenge) return interaction.editReply(`❌ Challenge "${challengeName}" not found!`);
 
-            if (!challenge) {
-                return message.author.send(`❌ Challenge "${challengeName}" not found!`).catch(console.error);
-            }
+            const existing = await db.get('SELECT * FROM submissions WHERE user_id = ? AND challenge_id = ?', [interaction.user.id, challenge.id]);
+            if (existing) return interaction.editReply(`❌ You already solved **${challengeName}**!`);
 
-            // Check if already solved
-            const existing = await db.get(
-                'SELECT * FROM submissions WHERE user_id = ? AND challenge_id = ?',
-                [message.author.id, challenge.id]
-            );
+            if (userFlag !== challenge.flag) return interaction.editReply('❌ Incorrect flag! Try again.');
 
-            if (existing) {
-                return message.author.send(`❌ You already solved ${challengeName}!`).catch(console.error);
-            }
-
-            // Verify flag
-            if (userFlag !== challenge.flag) {
-                return message.author.send('❌ Incorrect flag!').catch(console.error);
-            }
-
-            // Get current solver count and position
-            const solverCount = await db.get(
-                'SELECT COUNT(*) as count FROM submissions WHERE challenge_id = ?',
-                [challenge.id]
-            );
+            const solverCount = await db.get('SELECT COUNT(*) as count FROM submissions WHERE challenge_id = ?', [challenge.id]);
             const position = solverCount.count + 1;
-            
-            // Calculate points for this solver (decreases by 50 for each position)
-            const pointsAwarded = Math.max(50, challenge.base_points - ((position - 1) * 50));
 
-            // Update challenge's current points
-            const newChallengePoints = Math.max(50, challenge.base_points - (position * 50));
-            await db.run(
-                'UPDATE challenges SET points = ? WHERE id = ?',
-                [newChallengePoints, challenge.id]
-            );
+            // Fixed points — no decreasing, everyone gets the same points
+            const pointsAwarded = challenge.points;
 
-            // Add new solver
             await db.run(
-                `INSERT INTO users (id, username, points) 
-                VALUES (?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                username = excluded.username,
-                points = points + excluded.points`,
-                [message.author.id, message.author.username, pointsAwarded]
+                `INSERT INTO users (id, username, points) VALUES (?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET username = excluded.username, points = points + excluded.points`,
+                [interaction.user.id, interaction.user.username, pointsAwarded]
             );
 
             await db.run(
                 'INSERT INTO submissions (user_id, challenge_id, points_earned, position) VALUES (?, ?, ?, ?)',
-                [message.author.id, challenge.id, pointsAwarded, position]
+                [interaction.user.id, challenge.id, pointsAwarded, position]
             );
 
-            // Adjust points for all previous solvers (-50 points each)
-            if (position > 1) {
-                const previousSolvers = await db.all(
-                    'SELECT user_id FROM submissions WHERE challenge_id = ? AND user_id != ?',
-                    [challenge.id, message.author.id]
-                );
-                
-                for (const solver of previousSolvers) {
-                    await db.run(
-                        'UPDATE users SET points = points - 50 WHERE id = ?',
-                        [solver.user_id]
-                    );
-                    
-                    await db.run(
-                        'UPDATE submissions SET points_earned = points_earned - 50 WHERE user_id = ? AND challenge_id = ?',
-                        [solver.user_id, challenge.id]
-                    );
-                }
-            }
+            let positionMsg = position === 1 ? '🥇 First Blood!' : position === 2 ? '🥈 Second solver!' : position === 3 ? '🥉 Third solver!' : `🏅 Position #${position}`;
 
-            // Prepare success message
-            let positionMsg = '';
-            if (position === 1) positionMsg = '🥇 First solver!';
-            else if (position === 2) positionMsg = '🥈 Second solver!';
-            else if (position === 3) positionMsg = '🥉 Third solver!';
-            else positionMsg = `🏅 Position #${position}`;
+            await interaction.editReply(`✅ Correct flag for **${challengeName}**!\n${positionMsg}\n**+${pointsAwarded} points**`);
 
-            await message.author.send(
-                `✅ Correct flag for **${challengeName}**!\n` +
-                `${positionMsg}\n` +
-                `+${pointsAwarded} points (Base: ${challenge.base_points}, Position adjustment: -${(position-1)*50})`
-            ).catch(console.error);
-
-            // Update announcement message
-            await updateChallengeAnnouncement(db, challenge.name);
-
-            // Announce first 3 solvers publicly
+            // Announce in submission channel
             if (position <= 3 && SUBMISSION_CHANNEL_ID) {
                 const channel = await client.channels.fetch(SUBMISSION_CHANNEL_ID);
                 const embed = new EmbedBuilder()
-                    .setTitle(`${position === 1 ? '🥇' : position === 2 ? '🥈' : '🥉'} ${message.author.username} solved ${challengeName}!`)
+                    .setTitle(`${position === 1 ? '🥇' : position === 2 ? '🥈' : '🥉'} ${interaction.user.username} solved ${challengeName}!`)
                     .setColor(position === 1 ? '#FFD700' : position === 2 ? '#C0C0C0' : '#CD7F32')
                     .addFields(
                         { name: 'Points Awarded', value: pointsAwarded.toString(), inline: true },
                         { name: 'Position', value: `#${position}`, inline: true },
-                        { name: 'Current Challenge Points', value: newChallengePoints.toString(), inline: true },
-                        { name: 'Challenge Author', value: challenge.author_name, inline: true }
-                    )
-                    .setFooter({ text: `Total solvers: ${position}` });
+                    );
                 await channel.send({ embeds: [embed] });
             }
 
-        } catch (error) {
-            console.error('Flag submission error:', error);
-            message.author.send('❌ Error processing your submission!').catch(console.error);
+        } catch (err) {
+            console.error('Flag error:', err);
+            interaction.editReply('❌ Error processing submission!');
         }
         return;
     }
 
-    // Create challenge command (Admin only)
-    if (command === 'create') {
-        if (!message.member.roles.cache.has(process.env.ADMIN_ROLE_ID)) {
-            const reply = await message.channel.send('❌ Admin only command!');
-            setTimeout(() => reply.delete(), 5000);
-            return;
-        }
+    // /create (admin)
+    if (commandName === 'create') {
+        if (!isAdmin(interaction.member)) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
 
-        // Split by pipe but handle quoted sections properly
-        const parts = message.content.slice(8).match(/[^|"']+|"([^"]*)"|'([^']*)'/g).map(p => p.trim().replace(/^["']|["']$/g, ''));
-        
-        if (parts.length < 6) {
-            const reply = await message.channel.send(
-                '❌ Format: ,create name | difficulty | description | category | flag_format | flag | [link]\n' +
-                'Example: ,create "XSS Challenge" | Medium | "Find the XSS" | Web | flag{xxx} | flag{real_flag} | discord.com'
-            );
-            setTimeout(() => reply.delete(), 10000);
-            return;
-        }
+        const name = interaction.options.getString('name');
+        const difficulty = interaction.options.getString('difficulty');
+        const description = interaction.options.getString('description');
+        const category = interaction.options.getString('category');
+        const flagFormat = interaction.options.getString('flag_format');
+        const flag = interaction.options.getString('flag');
+        const points = interaction.options.getInteger('points');
+        const link = interaction.options.getString('link') || 'No Link Provided';
 
-        const [name, difficulty, description, category, flagFormat, flag, link = 'No Link Provided'] = parts;
-        const basePoints = 1000; // Starting points for all challenges
+        await interaction.deferReply({ ephemeral: true });
 
         try {
-            // Check if challenge already exists
             const existing = await db.get('SELECT 1 FROM challenges WHERE name = ?', [name]);
-            if (existing) {
-                const reply = await message.channel.send(`❌ Challenge "${name}" already exists!`);
-                setTimeout(() => reply.delete(), 5000);
-                return;
-            }
+            if (existing) return interaction.editReply(`❌ Challenge "${name}" already exists!`);
 
             await db.run(
-                'INSERT INTO challenges (name, description, points, base_points, flag, difficulty, category, flag_format, link, author_id, author_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [name, description, basePoints, basePoints, flag, difficulty, category, flagFormat, link, message.author.id, message.author.username]
+                'INSERT INTO challenges (name, description, points, flag, difficulty, category, flag_format, link, author_id, author_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [name, description, points, flag, difficulty, category, flagFormat, link, interaction.user.id, interaction.user.username]
             );
 
-            // Create announcement embed
             const embed = new EmbedBuilder()
                 .setTitle(`🚩 New Challenge: ${name}`)
                 .setDescription(description)
                 .addFields(
                     { name: 'Difficulty', value: difficulty, inline: true },
                     { name: 'Category', value: category, inline: true },
-                    { name: 'Points', value: basePoints.toString(), inline: true },
+                    { name: 'Points', value: points.toString(), inline: true },
                     { name: 'Flag Format', value: flagFormat, inline: true },
                     { name: 'Link', value: link, inline: true },
-                    { name: 'Author', value: message.author.username, inline: true }
+                    { name: 'Author', value: interaction.user.username, inline: true }
                 )
                 .setColor(getDifficultyColor(difficulty))
-                .setFooter({ text: `Submit with ,flag ${name} <flag>` });
+                .setFooter({ text: `Submit with /flag` });
 
             if (ANNOUNCEMENT_CHANNEL_ID) {
                 const channel = await client.channels.fetch(ANNOUNCEMENT_CHANNEL_ID);
-                const announcement = await channel.send({ 
-                    content: '@here New challenge available!',
-                    embeds: [embed] 
-                });
-                await announcement.react('✅');
+                await channel.send({ content: '@here New challenge available!', embeds: [embed] });
             }
 
-            const reply = await message.channel.send('✅ Challenge created and announced!');
-            setTimeout(() => reply.delete(), 5000);
-        } catch (error) {
-            console.error('Challenge creation error:', error);
-            const reply = await message.channel.send('❌ Error creating challenge! See console for details.');
-            setTimeout(() => reply.delete(), 5000);
+            await interaction.editReply(`✅ Challenge "${name}" created and announced!`);
+        } catch (err) {
+            console.error('Create error:', err);
+            interaction.editReply('❌ Error creating challenge!');
         }
         return;
     }
 
-    // Edit challenge command (Admin only)
-    if (command === 'editchallenge') {
-        if (!message.member.roles.cache.has(process.env.ADMIN_ROLE_ID)) {
-            const reply = await message.channel.send('❌ Admin only command!');
-            setTimeout(() => reply.delete(), 5000);
-            return;
-        }
+    // /editchallenge (admin)
+    if (commandName === 'editchallenge') {
+        if (!isAdmin(interaction.member)) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
 
-        const parts = message.content.slice(14).split('|').map(p => p.trim());
-        if (parts.length < 3) {
-            const reply = await message.channel.send(
-                '❌ Format: ,editchallenge "Challenge Name" | field | new_value\n' +
-                'Fields: name, difficulty, description, category, flag, flag_format, link\n' +
-                'Example: ,editchallenge "XSS Challenge" | difficulty | Hard'
-            );
-            setTimeout(() => reply.delete(), 10000);
-            return;
-        }
+        const name = interaction.options.getString('name');
+        const field = interaction.options.getString('field').toLowerCase();
+        const value = interaction.options.getString('value');
+        const allowed = ['name', 'difficulty', 'description', 'category', 'flag', 'flag_format', 'link', 'points'];
 
-        const [challengeName, field, newValue] = parts;
-        const allowedFields = ['name', 'difficulty', 'description', 'category', 'flag', 'flag_format', 'link'];
-
-        if (!allowedFields.includes(field.toLowerCase())) {
-            const reply = await message.channel.send(`❌ Invalid field. Allowed: ${allowedFields.join(', ')}`);
-            setTimeout(() => reply.delete(), 5000);
-            return;
-        }
+        if (!allowed.includes(field)) return interaction.reply({ content: `❌ Invalid field. Allowed: ${allowed.join(', ')}`, ephemeral: true });
 
         try {
-            // Special handling for name changes
-            if (field.toLowerCase() === 'name') {
-                // Verify new name doesn't exist
-                const existing = await db.get(
-                    'SELECT 1 FROM challenges WHERE name = ?',
-                    [newValue]
-                );
-                if (existing) {
-                    return message.channel.send('❌ A challenge with that name already exists!');
-                }
-            }
-
-            const result = await db.run(
-                `UPDATE challenges SET ${field} = ? WHERE name = ?`,
-                [newValue, challengeName]
-            );
-
-            if (result.changes === 0) {
-                const reply = await message.channel.send('❌ Challenge not found!');
-                setTimeout(() => reply.delete(), 5000);
-            } else {
-                const reply = await message.channel.send(`✅ Challenge "${challengeName}" updated successfully!`);
-                setTimeout(() => reply.delete(), 5000);
-                
-                // Update announcement if exists
-                if (ANNOUNCEMENT_CHANNEL_ID && ['name', 'difficulty', 'description', 'category', 'flag_format'].includes(field.toLowerCase())) {
-                    await updateChallengeAnnouncement(db, field.toLowerCase() === 'name' ? newValue : challengeName);
-                }
-            }
-        } catch (error) {
-            console.error('Edit challenge error:', error);
-            const reply = await message.channel.send('❌ Error updating challenge!');
-            setTimeout(() => reply.delete(), 5000);
+            const finalValue = field === 'points' ? parseInt(value) : value;
+            const result = await db.run(`UPDATE challenges SET ${field} = ? WHERE name = ?`, [finalValue, name]);
+            if (result.changes === 0) return interaction.reply({ content: '❌ Challenge not found!', ephemeral: true });
+            return interaction.reply({ content: `✅ Challenge "${name}" updated!`, ephemeral: true });
+        } catch (err) {
+            console.error('Edit error:', err);
+            interaction.reply({ content: '❌ Error updating challenge!', ephemeral: true });
         }
         return;
     }
 
-    // Delete challenge command (Admin only)
-    if (command === 'deletechallenge') {
-        if (!message.member.roles.cache.has(process.env.ADMIN_ROLE_ID)) {
-            const reply = await message.channel.send('❌ Admin only command!');
-            setTimeout(() => reply.delete(), 5000);
-            return;
-        }
+    // /deletechallenge (admin)
+    if (commandName === 'deletechallenge') {
+        if (!isAdmin(interaction.member)) return interaction.reply({ content: '❌ Admin only!', ephemeral: true });
 
-        const challengeName = args.join(' ');
-        if (!challengeName) {
-            const reply = await message.channel.send('❌ Specify challenge name: ,deletechallenge <name>');
-            setTimeout(() => reply.delete(), 5000);
-            return;
-        }
+        const name = interaction.options.getString('name');
 
         try {
-            // First get challenge details for cleanup
-            const challenge = await db.get(
-                'SELECT * FROM challenges WHERE name = ?',
-                [challengeName]
-            );
+            const challenge = await db.get('SELECT * FROM challenges WHERE name = ?', [name]);
+            if (!challenge) return interaction.reply({ content: '❌ Challenge not found!', ephemeral: true });
 
-            if (!challenge) {
-                const reply = await message.channel.send('❌ Challenge not found!');
-                setTimeout(() => reply.delete(), 5000);
-                return;
+            const subs = await db.all('SELECT user_id, points_earned FROM submissions WHERE challenge_id = ?', [challenge.id]);
+            for (const s of subs) {
+                await db.run('UPDATE users SET points = points - ? WHERE id = ?', [s.points_earned, s.user_id]);
             }
-
-            // Remove all submissions and adjust user points
-            const submissions = await db.all(
-                'SELECT user_id, points_earned FROM submissions WHERE challenge_id = ?',
-                [challenge.id]
-            );
-
-            for (const sub of submissions) {
-                await db.run(
-                    'UPDATE users SET points = points - ? WHERE id = ?',
-                    [sub.points_earned, sub.user_id]
-                );
-            }
-
-            // Now delete the challenge and submissions
             await db.run('DELETE FROM submissions WHERE challenge_id = ?', [challenge.id]);
-            const result = await db.run('DELETE FROM challenges WHERE name = ?', [challengeName]);
+            await db.run('DELETE FROM challenges WHERE name = ?', [name]);
 
-            if (result.changes === 0) {
-                const reply = await message.channel.send('❌ Challenge not found!');
-                setTimeout(() => reply.delete(), 5000);
-            } else {
-                const reply = await message.channel.send(`✅ Challenge "${challengeName}" and all submissions deleted!`);
-                setTimeout(() => reply.delete(), 5000);
-            }
-        } catch (error) {
-            console.error('Delete challenge error:', error);
-            const reply = await message.channel.send('❌ Error deleting challenge!');
-            setTimeout(() => reply.delete(), 5000);
+            return interaction.reply({ content: `✅ Challenge "${name}" deleted and points refunded!`, ephemeral: true });
+        } catch (err) {
+            console.error('Delete error:', err);
+            interaction.reply({ content: '❌ Error deleting challenge!', ephemeral: true });
         }
         return;
     }
